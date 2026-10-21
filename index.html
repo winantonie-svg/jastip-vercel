@@ -82,8 +82,15 @@ async function api(path,opt={}){
 async function load(){
  try {
    const d=await(await api('/api/data?t='+Date.now())).json();
-   if(d.items){S.items=d.items;S.rc=d.rc||{};S.kurs=d.kurs||'4'}else if(!loaded){S.items=seed();S.rc={};await save()}
-   loaded=true;if(document.activeElement!==$('kr'))$('kr').value=S.kurs
+   if(d.items){
+       S.items=d.items; 
+       S.rc=d.rc||{}; 
+       S.kurs=d.kurs||'4';
+   } else if(!loaded){
+       S.items=seed(); S.rc={}; await save();
+   }
+   loaded=true;
+   if(document.activeElement!==$('kr'))$('kr').value=S.kurs;
  } catch(e) {
    stat('⚠ Gagal load: '+e.message, 1);
    throw e;
@@ -95,7 +102,6 @@ async function mutate(fn){
  busy++;
  try{
    stat('Menyimpan…');
-   await load(); 
    fn(); 
    await save(); 
    stat('☁ Tersimpan & tersinkron');
@@ -108,14 +114,14 @@ async function mutate(fn){
 }
 
 async function poll(){
- // JIKA lagi ada modal kebuka, JANGAN jalan! Biar ga nge-refresh form yang lagi diisi
  if(busy || modalOpen) return; 
  busy++;
  try{
    const d = await (await api('/api/data?t='+Date.now())).json();
-   // Cuma update kalau datanya emang beda (biar ga flicker)
-   if(JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
-      if(d.items){ S.items=d.items; S.rc=d.rc||{}; S.kurs=d.kurs||'4'; }
+   if(d.items && JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
+      S.items=d.items; 
+      S.rc=d.rc||{}; 
+      S.kurs=d.kurs||'4';
    }
    stat('☁ Tersinkron');
  }catch(e){
@@ -145,7 +151,7 @@ function render(){
 }
 
 function openBuy(id){
- modalOpen = true; // KUNCI: Matikan auto-sync selama modal kebuka
+ modalOpen = true; 
  cur=S.items.find(x=>x.id===id);selR=cur.rid||null;newImg=null;
  $('m1n').textContent=cur.n+' · qty '+cur.q;$('pp').value=cur.paid??'';$('pp').placeholder=cur.m!=null?'modal: '+cur.m:'mis. 69.60';$('fl').value='';$('pv').hidden=true;
  const ids=Object.keys(S.rc);$('oldw').hidden=!ids.length;
@@ -177,14 +183,13 @@ $('ls').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.da
  else if(d.v){const s=S.rc[d.v];if(s){$('vi').src=s;$('vw').classList.add('on')}else alert('Struk tidak ditemukan')}};
 $('vw').onclick=()=>$('vw').classList.remove('on');
 
-// Handler Batal / Tutup Modal
 document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{
     $(b.dataset.x).classList.remove('on');
-    modalOpen = false; // Buka kunci auto-sync
+    modalOpen = false; 
 });
 
 function openForm(id){
- modalOpen = true; // KUNCI: Matikan auto-sync selama modal kebuka
+ modalOpen = true; 
  editId=id||null;const x=id&&S.items.find(i=>i.id===id);
  $('m2t').textContent=x?'Edit barang':'Tambah barang baru';$('del').hidden=!x;
  $('an').value=x?x.n:'';$('aq').value=x?x.q:1;$('at').value=x?x.t:'';$('ap').value=x?x.p:'';$('am').value=x&&x.m!=null?x.m:'';
@@ -194,7 +199,7 @@ $('add').onclick=()=>openForm();
 $('as').onclick=()=>{const n=$('an').value.trim(),q=parseInt($('aq').value),p=num($('ap').value),m=num($('am').value);
  if(!n||!(q>0)||p==null){alert('Isi nama, qty (>0), dan harga jual.');return}
  const t=$('at').value.trim(),id=editId;$('m2').classList.remove('on');
- modalOpen = false; // Buka kunci auto-sync
+ modalOpen = false; 
  if(id)mutate(()=>{const x=S.items.find(i=>i.id===id);if(x)Object.assign(x,{n,q,p,m,t})});
  else{$('f').value='a';$('q').value='';mutate(()=>S.items.unshift({id:'n'+Date.now(),n,q,p,m,t,d:0}))}};
 $('del').onclick=()=>{if(!confirm('Hapus barang ini?'))return;const id=editId;$('m2').classList.remove('on');modalOpen = false;mutate(()=>{S.items=S.items.filter(i=>i.id!==id);gc()})};
@@ -212,7 +217,6 @@ $('ex').onclick=async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 
 render(); poll();
-// Polling jalan tiap 30 detik (tapi bakal nge-skip kalau ada modal kebuka)
 setInterval(poll, 30000); 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 </script>
