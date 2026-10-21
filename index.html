@@ -52,7 +52,7 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 
 <div class="ov" id="m1"><div class="sh"><h2>Barang dibeli</h2><div class="mt" id="m1n"></div>
 <label>Harga beli per barang (RM)</label><input id="pp" inputmode="decimal" placeholder="mis. 69.60">
-<label>Foto struk</label><input id="fl" type="file" accept="image/*"><img id="pv" class="pv" hidden>
+<label>Foto struk <span style="font-weight:400">(opsional)</span></label><input id="fl" type="file" accept="image/*"><img id="pv" class="pv" hidden>
 <div id="oldw"><label>Atau pakai struk yang sudah ada</label><div class="th" id="th"></div></div>
 <button class="btn" id="sv">✓ Simpan, tandai sudah dibeli</button><button class="btn s" data-x="m1">Batal</button></div></div>
 
@@ -122,7 +122,7 @@ $('sv').onclick=async()=>{
  try{if(newImg){b.textContent='Mengunggah struk…';url=(await(await api('/api/upload',{method:'POST',headers:{'content-type':'application/octet-stream'},body:newImg})).json()).url;rid='r'+Date.now()}}
  catch(e){alert('Upload struk gagal: '+e.message);b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';return}
  $('m1').classList.remove('on');b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';
- await mutate(()=>{if(url)S.rc[rid]=url;const x=S.items.find(i=>i.id===id);if(x){x.d=1;x.paid=p;x.rid=rid}gc()});
+ await mutate(()=>{if(url)S.rc[rid]=url;const x=S.items.find(i=>i.id===id);if(x){x.d=1;x.paid=p;if(rid)x.rid=rid;else delete x.rid}gc()});
 };
 function gc(){const used=new Set(S.items.map(i=>i.rid));Object.keys(S.rc).forEach(r=>{if(!used.has(r))delete S.rc[r]})}
 function unbuy(x){const id=x.id;mutate(()=>{const y=S.items.find(i=>i.id===id);if(y){y.d=0;delete y.paid;delete y.rid}gc()})}
@@ -159,6 +159,5 @@ $('ex').onclick=async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 render();poll();setInterval(poll,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 </script>
- 
 </body>
 </html>
