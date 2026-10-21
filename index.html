@@ -37,8 +37,6 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 .th{display:flex;gap:6px;overflow-x:auto;padding:4px 0}.th img{height:64px;border-radius:8px;border:3px solid transparent;cursor:pointer}.th img.sel{border-color:var(--ok)}
 .pv{max-width:100%;max-height:200px;border-radius:10px;margin-top:6px}
 #vw{align-items:center;padding:10px}#vw img{max-width:100%;max-height:100%;border-radius:8px}
-
-/* Style Tombol Save Melayang */
 #save-bar{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%) translateY(100px);background:var(--ink);color:var(--bg);padding:12px 24px;border-radius:30px;font-weight:700;box-shadow:0 4px 14px #0006;display:flex;align-items:center;gap:12px;z-index:15;transition:transform .3s;cursor:pointer;opacity:0}
 #save-bar.on{transform:translateX(-50%) translateY(0);opacity:1}
 </style>
@@ -52,10 +50,7 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 <div class="bar"><i id="pb"></i></div>
 <div class="tools"><input id="q" placeholder="Cari barang…"><select id="f"><option value="a">Semua</option><option value="n">Belum</option><option value="d">Sudah</option></select></div>
 <div id="ls"></div></div>
-
 <button class="fab" id="add">＋ Add item</button>
-
-<!-- Tombol Save Manual -->
 <div id="save-bar">💾 Simpan Perubahan</div>
 
 <div class="ov" id="m1"><div class="sh"><h2>Barang dibeli</h2><div class="mt" id="m1n"></div>
@@ -87,25 +82,45 @@ async function api(path,opt={}){
  if(r.status===401){const p=prompt('Masukkan PIN');if(p){localStorage.setItem('jt-pin',p);return api(path,opt)}throw new Error('PIN diperlukan')}
  if(!r.ok)throw new Error('Server error '+r.status);return r}
 
-async function load(){
- try {
-   const d=await(await api('/api/data?t='+Date.now())).json();
-   if(d.items){
+// Fungsi load data di awal
+async function initLoad(){
+  try{
+    const r = await api('/api/data?t='+Date.now());
+    const d = await r.json();
+    if(d.items){
        S.items=d.items; 
        S.rc=d.rc||{}; 
        S.kurs=d.kurs||'4';
-   } else if(!loaded){
-       S.items=seed(); S.rc={}; await save(true);
+    } else {
+       S.items=seed(); S.rc={};
+       await api('/api/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({items:S.items,rc:S.rc,kurs:S.kurs})});
+    }
+    loaded=true;
+    if(document.activeElement!==$('kr'))$('kr').value=S.kurs;
+    stat('☁ Tersinkron');
+  }catch(e){
+    stat('⚠ Gagal load: '+e.message,1);
+  }
+  render();
+}
+
+// Fungsi auto-sync (cuma jalan kalau data aman)
+async function poll(){
+ if(!loaded || isDirty) return; // Jangan ganggu kalau ada perubahan belum disave
+ try{
+   const d = await (await api('/api/data?t='+Date.now())).json();
+   if(d.items && JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
+      S.items=d.items; 
+      S.rc=d.rc||{}; 
+      S.kurs=d.kurs||'4';
+      render();
    }
-   loaded=true;
-   if(document.activeElement!==$('kr'))$('kr').value=S.kurs;
- } catch(e) {
-   stat('⚠ Gagal load: '+e.message, 1);
-   throw e;
+   stat('☁ Tersinkron');
+ }catch(e){
+   stat('⚠ '+e.message,1);
  }
 }
 
-// Fungsi save sekarang butuh parameter manualSave
 async function save(manualSave = false) {
     if (!manualSave && !isDirty) return; 
     stat('Menyimpan…');
@@ -125,23 +140,6 @@ function setDirty(val) {
 }
 
 $('save-bar').onclick = () => save(true);
-
-// Refresh otomatis (hanya kalau lagi ga ada perubahan)
-async function poll(){
- if(isDirty || loaded===false) return; 
- try{
-   const d = await (await api('/api/data?t='+Date.now())).json();
-   if(d.items && JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
-      S.items=d.items; 
-      S.rc=d.rc||{}; 
-      S.kurs=d.kurs||'4';
-      render();
-   }
-   stat('☁ Tersinkron');
- }catch(e){
-   stat('⚠ '+e.message,1);
- }
-}
 
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fm=n=>Number(n).toLocaleString('id-ID',{maximumFractionDigits:2});
@@ -228,7 +226,8 @@ $('ex').onclick=async()=>{
  const csv='\uFEFF'+[H,...R].map(r=>r.map(cs).join(',')).join('\r\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 
-render(); load();
+// JALANKAN INISIALISASI
+render(); initLoad();
 setInterval(poll, 30000); 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 </script>
