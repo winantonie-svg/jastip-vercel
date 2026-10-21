@@ -160,5 +160,6 @@ $('ex').onclick=async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 render();poll();setInterval(poll,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 </script>
+ 
 </body>
 </html>
