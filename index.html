@@ -45,7 +45,15 @@ input,select{font:inherit;color:var(--ink);background:var(--card);border:1px sol
 <div class="w">
 <div class="hd"><h1>🛍️ Jastip Tracker</h1><button class="mini" id="ex">⬇ Export CSV</button></div>
 <div class="mt" id="sy" style="margin:-6px 0 8px">Menghubungkan…</div>
-<div class="st"><div><b id="s1">0/0</b><span>Item kebeli</span></div><div><b id="s2">0</b><span>Omzet (jual × qty)</span></div><div><b id="s3">0</b><span>Modal (beli × qty)</span></div><div><b id="s4">0</b><span>Netto (omzet − modal)</span></div></div>
+<div class="st">
+  <div><b id="s1">0/0</b><span>Item kebeli</span></div>
+  <div><b id="s2">0</b><span>Omzet (jual × qty)</span></div>
+  <div><b id="s3">0</b><span>Modal (beli × qty)</span></div>
+  <div><b id="s4">0</b><span>Netto (omzet − modal)</span></div>
+  <!-- FITUR BARU: Total Qty -->
+  <div><b id="s5">0</b><span>Total Qty (Semua)</span></div>
+  <div><b id="s6" style="color:var(--ok)">0</b><span>Qty (Sudah dibeli)</span></div>
+</div>
 <div class="kr">Kurs: 1 RM = Rp <input id="kr" inputmode="decimal" value="4"> rb <span id="ms"></span></div>
 <div class="bar"><i id="pb"></i></div>
 <div class="tools"><input id="q" placeholder="Cari barang…"><select id="f"><option value="a">Semua</option><option value="n">Belum</option><option value="d">Sudah</option></select></div>
@@ -82,7 +90,6 @@ async function api(path,opt={}){
  if(r.status===401){const p=prompt('Masukkan PIN');if(p){localStorage.setItem('jt-pin',p);return api(path,opt)}throw new Error('PIN diperlukan')}
  if(!r.ok)throw new Error('Server error '+r.status);return r}
 
-// Fungsi load data di awal
 async function initLoad(){
   try{
     const r = await api('/api/data?t='+Date.now());
@@ -104,9 +111,8 @@ async function initLoad(){
   render();
 }
 
-// Fungsi auto-sync (cuma jalan kalau data aman)
 async function poll(){
- if(!loaded || isDirty) return; // Jangan ganggu kalau ada perubahan belum disave
+ if(!loaded || isDirty) return; 
  try{
    const d = await (await api('/api/data?t='+Date.now())).json();
    if(d.items && JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
@@ -138,7 +144,6 @@ function setDirty(val) {
     isDirty = val;
     $('save-bar').classList.toggle('on', val);
 }
-
 $('save-bar').onclick = () => save(true);
 
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -148,11 +153,25 @@ const cost=x=>x.d?x.paid:x.m;
 
 function render(){
  const t=$('q').value.toLowerCase(),f=$('f').value,it=S.items,dn=it.filter(x=>x.d).length;
- let om=0,md=0,miss=0;
- for(const x of it){om+=x.p*x.q;const c=cost(x);if(c==null)miss++;else md+=c*x.q}
+ 
+ let om=0,md=0,miss=0,tQty=0,dQty=0; // Inisialisasi total qty
+ 
+ for(const x of it){
+   om+=x.p*x.q;
+   const c=cost(x);
+   if(c==null) miss++; 
+   else md+=c*x.q;
+   
+   // Hitung total qty
+   tQty += Number(x.q);
+   if(x.d) dQty += Number(x.q);
+ }
+ 
  const nt=om-md*kurs();
  $('s1').textContent=dn+'/'+it.length;$('s2').textContent='Rp '+fm(om)+' rb';$('s3').textContent='RM '+fm(md);
  $('s4').textContent='Rp '+fm(nt)+' rb';$('s4').className=nt<0?'neg':'pos';
+ $('s5').textContent=fm(tQty); // Tampilkan Total Qty Semua
+ $('s6').textContent=fm(dQty); // Tampilkan Total Qty Terbeli
  $('ms').textContent=miss?'· '+miss+' barang belum ada modal':'';
  $('pb').style.width=(it.length?dn/it.length*100:0)+'%';
  $('ls').innerHTML=it.filter(x=>x.n.toLowerCase().includes(t)&&(f==='a'||(f==='d')===!!x.d)).map(x=>`<div class="row ${x.d?'d':''}"><button class="ck" data-c="${x.id}" aria-label="Centang">${x.d?'✓':''}</button><div style="flex:1;min-width:0"><div class="nm">${esc(x.n)}${x.t?`<span class="tk">${esc(x.t)}</span>`:''}</div>
@@ -226,7 +245,6 @@ $('ex').onclick=async()=>{
  const csv='\uFEFF'+[H,...R].map(r=>r.map(cs).join(',')).join('\r\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 
-// JALANKAN INISIALISASI
 render(); initLoad();
 setInterval(poll, 30000); 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
