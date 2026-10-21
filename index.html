@@ -118,7 +118,6 @@ $('th').onclick=e=>{const r=e.target.dataset.r;if(!r)return;selR=r;newImg=null;$
 $('sv').onclick=async()=>{
  const p=num($('pp').value),b=$('sv');
  if(p==null||p<0){alert('Isi harga beli per barang dulu.');return}
- if(!newImg&&!selR){alert('Upload foto struk atau pilih struk yang sudah ada.');return}
  const id=cur.id;let rid=selR,url=null;b.disabled=true;
  try{if(newImg){b.textContent='Mengunggah struk…';url=(await(await api('/api/upload',{method:'POST',headers:{'content-type':'application/octet-stream'},body:newImg})).json()).url;rid='r'+Date.now()}}
  catch(e){alert('Upload struk gagal: '+e.message);b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';return}
