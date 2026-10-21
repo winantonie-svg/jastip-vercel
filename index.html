@@ -69,7 +69,9 @@ const $=id=>document.getElementById(id);
 const num=s=>{s=String(s).trim().replace(',','.');return s===''||isNaN(s)?null:parseFloat(s)};
 function pm(s){s=String(s||'');const m=s.match(/^(\d+(?:,\d+)?)/);return m?{m:parseFloat(m[1].replace(',','.')),t:''}:{m:null,t:s}}
 const seed=()=>D.map((d,i)=>({id:'i'+i,n:d[1],q:d[2],p:d[3],...pm(d[0]),d:0}));
-let S={items:[],rc:{},kurs:'4'},cur=null,selR=null,newImg=null,editId=null,loaded=false,busy=0,kt=null;
+
+let S={items:[],rc:{},kurs:'4'},cur=null,selR=null,newImg=null,editId=null,loaded=false,busy=0,kt=null,modalOpen=false;
+
 const stat=(t,bad)=>{const e=$('sy');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--mut)'};
 
 async function api(path,opt={}){
@@ -93,9 +95,9 @@ async function mutate(fn){
  busy++;
  try{
    stat('Menyimpan…');
-   await load(); // ambil data terbaru dulu sebelum ngedit
-   fn(); // lakukan perubahan (centang/edit)
-   await save(); // simpan ke database
+   await load(); 
+   fn(); 
+   await save(); 
    stat('☁ Tersimpan & tersinkron');
  } catch(e){
    stat('⚠ '+e.message,1);
@@ -105,19 +107,15 @@ async function mutate(fn){
  render();
 }
 
-// Polling (auto-sync) dibuat lebih pintar
 async function poll(){
- if(busy) return; // jangan jalan kalau lagi nyimpen
- const ae = document.activeElement;
- if(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return; // jangan ganggu kalau user lagi ngetik
-
+ // JIKA lagi ada modal kebuka, JANGAN jalan! Biar ga nge-refresh form yang lagi diisi
+ if(busy || modalOpen) return; 
  busy++;
  try{
-   const r = await api('/api/data?t='+Date.now());
-   const d = await r.json();
+   const d = await (await api('/api/data?t='+Date.now())).json();
    // Cuma update kalau datanya emang beda (biar ga flicker)
    if(JSON.stringify(d) !== JSON.stringify({items:S.items, rc:S.rc, kurs:S.kurs})){
-      if(d.items){ S.items=d.items; S.rc=d.rc||{}; S.kurs=d.kurs||'4' }
+      if(d.items){ S.items=d.items; S.rc=d.rc||{}; S.kurs=d.kurs||'4'; }
    }
    stat('☁ Tersinkron');
  }catch(e){
@@ -147,6 +145,7 @@ function render(){
 }
 
 function openBuy(id){
+ modalOpen = true; // KUNCI: Matikan auto-sync selama modal kebuka
  cur=S.items.find(x=>x.id===id);selR=cur.rid||null;newImg=null;
  $('m1n').textContent=cur.n+' · qty '+cur.q;$('pp').value=cur.paid??'';$('pp').placeholder=cur.m!=null?'modal: '+cur.m:'mis. 69.60';$('fl').value='';$('pv').hidden=true;
  const ids=Object.keys(S.rc);$('oldw').hidden=!ids.length;
@@ -164,7 +163,7 @@ $('sv').onclick=async()=>{
  const id=cur.id;let rid=selR,url=null;b.disabled=true;
  try{if(newImg){b.textContent='Mengunggah struk…';url=(await(await api('/api/upload',{method:'POST',headers:{'content-type':'application/octet-stream'},body:newImg})).json()).url;rid='r'+Date.now()}}
  catch(e){alert('Upload struk gagal: '+e.message);b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';return}
- $('m1').classList.remove('on');b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';
+ $('m1').classList.remove('on');modalOpen=false;b.disabled=false;b.textContent='✓ Simpan, tandai sudah dibeli';
  await mutate(()=>{if(url)S.rc[rid]=url;const x=S.items.find(i=>i.id===id);if(x){x.d=1;x.paid=p;if(rid)x.rid=rid;else delete x.rid}gc()});
 };
 
@@ -177,9 +176,15 @@ $('ls').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.da
  else if(d.e)openForm(d.e);
  else if(d.v){const s=S.rc[d.v];if(s){$('vi').src=s;$('vw').classList.add('on')}else alert('Struk tidak ditemukan')}};
 $('vw').onclick=()=>$('vw').classList.remove('on');
-document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>$(b.dataset.x).classList.remove('on'));
+
+// Handler Batal / Tutup Modal
+document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{
+    $(b.dataset.x).classList.remove('on');
+    modalOpen = false; // Buka kunci auto-sync
+});
 
 function openForm(id){
+ modalOpen = true; // KUNCI: Matikan auto-sync selama modal kebuka
  editId=id||null;const x=id&&S.items.find(i=>i.id===id);
  $('m2t').textContent=x?'Edit barang':'Tambah barang baru';$('del').hidden=!x;
  $('an').value=x?x.n:'';$('aq').value=x?x.q:1;$('at').value=x?x.t:'';$('ap').value=x?x.p:'';$('am').value=x&&x.m!=null?x.m:'';
@@ -189,9 +194,10 @@ $('add').onclick=()=>openForm();
 $('as').onclick=()=>{const n=$('an').value.trim(),q=parseInt($('aq').value),p=num($('ap').value),m=num($('am').value);
  if(!n||!(q>0)||p==null){alert('Isi nama, qty (>0), dan harga jual.');return}
  const t=$('at').value.trim(),id=editId;$('m2').classList.remove('on');
+ modalOpen = false; // Buka kunci auto-sync
  if(id)mutate(()=>{const x=S.items.find(i=>i.id===id);if(x)Object.assign(x,{n,q,p,m,t})});
  else{$('f').value='a';$('q').value='';mutate(()=>S.items.unshift({id:'n'+Date.now(),n,q,p,m,t,d:0}))}};
-$('del').onclick=()=>{if(!confirm('Hapus barang ini?'))return;const id=editId;$('m2').classList.remove('on');mutate(()=>{S.items=S.items.filter(i=>i.id!==id);gc()})};
+$('del').onclick=()=>{if(!confirm('Hapus barang ini?'))return;const id=editId;$('m2').classList.remove('on');modalOpen = false;mutate(()=>{S.items=S.items.filter(i=>i.id!==id);gc()})};
 $('q').oninput=render;$('f').onchange=render;$('kr').oninput=()=>{clearTimeout(kt);const v=$('kr').value;kt=setTimeout(()=>mutate(()=>{S.kurs=v}),700);S.kurs=v;render()};
 const cs=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 
@@ -206,7 +212,7 @@ $('ex').onclick=async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='jastip-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()};
 
 render(); poll();
-// Polling lebih jarang (30 detik sekali) dan cuma aktif kalau tab-nya lagi dibuka
+// Polling jalan tiap 30 detik (tapi bakal nge-skip kalau ada modal kebuka)
 setInterval(poll, 30000); 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 </script>
